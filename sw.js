@@ -1,6 +1,6 @@
 // Service worker: после первой загрузки редактор открывается без интернета.
 // Список файлов сборки берётся из precache.json (его пишет плагин в vite.config.ts).
-const VERSION = 'kidcode-v1';
+const VERSION = 'kidcode-v2';
 const SHELL = ['/', '/index.html', '/help', '/privacy', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -11,7 +11,13 @@ self.addEventListener('install', (event) => {
       const r = await fetch('/precache.json', { cache: 'no-store' });
       files = await r.json();
     } catch (e) { /* без списка — только оболочка */ }
-    await cache.addAll([...SHELL, ...files].filter((v, i, a) => a.indexOf(v) === i));
+    // По одному файлу: если какой-то не отдался (например, /help на GitHub Pages приходит с кодом 404),
+    // установка не срывается — остальное всё равно сохраняется
+    const urls = [...SHELL, ...files].filter((v, i, a) => a.indexOf(v) === i);
+    await Promise.allSettled(urls.map(async (u) => {
+      const res = await fetch(u, { cache: 'no-cache' });
+      if (res.ok) await cache.put(u, res);
+    }));
     await self.skipWaiting();
   })());
 });
